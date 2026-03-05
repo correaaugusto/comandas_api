@@ -1,0 +1,36 @@
+#Augusto correa
+
+### Verbo GET – listar todos
+GET http://localhost:8000/funcionario/ HTTP/1.1
+
+### Verbo GET – listar um
+GET http://localhost:8000/funcionario/10 HTTP/1.1
+
+### Verbo POST – adicionar
+POST http://127.0.0.1:8000/funcionario/ HTTP/1.1
+Content-Type: application/json
+
+{
+    "nome" : "Augusto Correa",
+    "matricula" : "123456",
+    "cpf" : "12345678900",
+    "telefone" : "11999999999",
+    "grupo" : 1,
+    "senha" : "123456"
+}
+
+### Verbo PUT – atualiza
+PUT http://127.0.0.1:8000/funcionario/2 HTTP/1.1
+Content-Type: application/json
+
+{
+    "nome" : "Augusto Correa",
+    "matricula" : "123456",
+    "cpf" : "12345678900",
+    "telefone" : "11999999999",
+    "grupo" : 1,
+    "senha" : "123456789"
+}
+
+### Verbo DELETE - excluir
+DELETE http://127.0.0.1:8000/funcionario/3 HTTP/1.1

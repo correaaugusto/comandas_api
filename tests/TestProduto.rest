@@ -1,0 +1,28 @@
+#Augusto correa
+
+### Verbo GET – listar todos
+GET http://localhost:8000/produto/ HTTP/1.1
+
+### Verbo GET – listar um
+GET http://localhost:8000/produto/10 HTTP/1.1
+
+### Verbo POST – adicionar
+POST http://localhost:8000/produto/ HTTP/1.1
+Content-Type: application/json
+
+{
+    "nome": "Produto Teste",
+    "descricao": "Descrição do produto de teste"
+}
+
+### Verbo PUT – atualizar
+PUT http://localhost:8000/produto/10 HTTP/1.1
+Content-Type: application/json
+
+{
+    "nome": "Produto Teste Atualizado",
+    "descricao": "Descrição do produto de teste atualizada"
+}
+
+### Verbo DELETE - excluir
+DELETE http://localhost:8000/produto/10 HTTP/1.1
