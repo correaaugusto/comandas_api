@@ -12,7 +12,8 @@ Content-Type: application/json
 
 {
     "nome": "Produto Teste",
-    "descricao": "Descrição do produto de teste"
+    "descricao": "Descrição do produto de teste",
+    "valor_unitario" : 9.99
 }
 
 ### Verbo PUT – atualizar
@@ -25,4 +26,4 @@ Content-Type: application/json
 }
 
 ### Verbo DELETE - excluir
-DELETE http://localhost:8000/produto/10 HTTP/1.1
+DELETE http://localhost:8000/produto/1 HTTP/1.1
