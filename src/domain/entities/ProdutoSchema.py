@@ -1,13 +1,14 @@
 from pydantic import BaseModel, ConfigDict
 from typing import Optional
 
-##Augusto correa
+## Augusto correa
 
 class ProdutoCreate(BaseModel):
     nome: str
     descricao: str
-    foto: bytes = None
+    foto: Optional[bytes] = None
     valor_unitario: float
+
 
 class ProdutoUpdate(BaseModel):
     nome: Optional[str] = None
@@ -15,10 +16,12 @@ class ProdutoUpdate(BaseModel):
     foto: Optional[bytes] = None
     valor_unitario: Optional[float] = None
 
+
 class ProdutoResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
+
     id: int
     nome: str
     descricao: str
-    foto: bytes
+    foto: Optional[bytes] = None
     valor_unitario: float
