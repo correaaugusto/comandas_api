@@ -17,7 +17,7 @@ Content-Type: application/json
 }
 
 ### Verbo PUT – atualizar
-PUT http://localhost:8000/produto/10 HTTP/1.1
+PUT http://localhost:8000/produto/1 HTTP/1.1
 Content-Type: application/json
 
 {
