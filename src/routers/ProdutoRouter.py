@@ -6,12 +6,16 @@ from typing import List
 from src.domain.entities.ProdutoSchema import (
     ProdutoCreate,
     ProdutoUpdate,
-    ProdutoResponse
+    ProdutoResponse,
+    ProdutoPublicoResponse
 )
+
+from src.domain.Schemas.AuthSchema import FuncionarioAuth
 
 # Infra
 from src.infra.orm.ProdutoModel import ProdutoDB
 from src.infra.database import get_db
+from src.infra.dependencies import get_current_active_user, require_group
 
 #Augusto correa
 
@@ -19,7 +23,7 @@ router = APIRouter()
 
 # Criar as rotas/endpoints: GET, POST, PUT, DELETE
 @router.get("/produto/", response_model=List[ProdutoResponse], tags=["Produto"], status_code=status.HTTP_200_OK)
-async def get_produto(db: Session = Depends(get_db)):
+async def get_produto(db: Session = Depends(get_db),  _: FuncionarioAuth = Depends(get_current_active_user)):
     """Retorna todos os produtos"""
     try:
         produtos = db.query(ProdutoDB).all()
@@ -29,9 +33,32 @@ async def get_produto(db: Session = Depends(get_db)):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Erro ao buscar produtos: {str(e)}"
 )
+    
+@router.get("/produto/publico", response_model=list[ProdutoPublicoResponse], tags=["Produto"])
+async def get_produtos_publicos(db: Session = Depends(get_db)):
+    """Lista produtos sem id e valor (rota pública)"""
+    try:
+        produtos = db.query(ProdutoDB).all()
+
+        # Filtra os campos manualmente
+        resultado = [
+            {
+                "nome": p.nome,
+                "descricao": p.descricao
+            }
+            for p in produtos
+        ]
+
+        return resultado
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro ao buscar produtos públicos: {str(e)}"
+        )
 
 @router.get("/produto/{id}", response_model=ProdutoResponse, tags=["Produto"], status_code=status.HTTP_200_OK)
-async def get_produto(id: int, db: Session = Depends(get_db)):
+async def get_produto(id: int, db: Session = Depends(get_db),  _: FuncionarioAuth = Depends(get_current_active_user)):
     """Retorna um produto específico pelo ID"""
     try:
         produto = db.query(ProdutoDB).filter(ProdutoDB.id == id).first()
@@ -49,7 +76,7 @@ async def get_produto(id: int, db: Session = Depends(get_db)):
 )
     
 @router.post("/produto/", response_model=ProdutoResponse, status_code=status.HTTP_201_CREATED, tags=["Produto"])
-async def post_produto(produto_data: ProdutoCreate, db: Session = Depends(get_db)):
+async def post_produto(produto_data: ProdutoCreate, db: Session = Depends(get_db),   _: FuncionarioAuth = Depends(require_group([1]))):
     """Cria um novo produto"""
     try:
         # Verifica se já existe produto com este nome
@@ -83,7 +110,7 @@ async def post_produto(produto_data: ProdutoCreate, db: Session = Depends(get_db
         )
     
 @router.put("/produto/{id}", response_model=ProdutoResponse, tags=["Produto"], status_code=status.HTTP_200_OK)
-async def put_produto(id: int, produto_data: ProdutoUpdate, db: Session = Depends(get_db)):
+async def put_produto(id: int, produto_data: ProdutoUpdate, db: Session = Depends(get_db),  _: FuncionarioAuth = Depends(require_group([1]))):
     """Atualiza um produto existente"""
     try:
         produto = db.query(ProdutoDB).filter(ProdutoDB.id == id).first()
@@ -121,7 +148,7 @@ async def put_produto(id: int, produto_data: ProdutoUpdate, db: Session = Depend
         )
     
 @router.delete("/produto/{id}", tags=["Produto"], status_code=status.HTTP_204_NO_CONTENT)
-async def delete_produto(id: int, db: Session = Depends(get_db)):
+async def delete_produto(id: int, db: Session = Depends(get_db),  _: FuncionarioAuth = Depends(require_group([1]))):
     """Exclui um produto existente"""
     try:
         produto = db.query(ProdutoDB).filter(ProdutoDB.id == id).first()

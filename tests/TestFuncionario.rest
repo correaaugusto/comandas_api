@@ -11,12 +11,12 @@ POST http://127.0.0.1:8000/funcionario/ HTTP/1.1
 Content-Type: application/json
 
 {
-    "nome" : "Augusto Correa",
-    "matricula" : "123457",
-    "cpf" : "12345678900",
+    "nome" : "Zé das Batatas",
+    "matricula" : "152122",
+    "cpf" : "2",
     "telefone" : "11999999999",
     "grupo" : 1,
-    "senha" : "123456"
+    "senha" : "abcbolinhas"
 }
 
 ### Verbo PUT – atualiza
@@ -29,3 +29,38 @@ Content-Type: application/json
 
 ### Verbo DELETE - excluir
 DELETE http://127.0.0.1:8000/funcionario/1 HTTP/1.1
+
+### Login para obter access e refresh tokens
+POST http://127.0.0.1:8000/auth/login HTTP/1.1
+content-type: application/json
+
+{
+    "cpf" : "12345678900",
+    "senha" : "123456"
+}
+
+### token gerado
+
+@access_token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwMCIsImlkIjoxLCJncnVwbyI6MywiZXhwIjoxNzc0MzE3Njg3LCJ0eXBlIjoiYWNjZXNzIn0.BpHQnCVkheYcKLmYpEwR3jrCtzGcUsC06kM46nufdD4
+Ctz3yAfJdyTyznX7tau-aYXUkIqL0
+
+@refresh_token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwMCIsImlkIjoxLCJncnVwbyI6MywiZXhwIjoxNzc0OTIxNTg3LCJ0eXBlIjoicmVmcmVzaCJ9.D35gvk5XVqap6__NRjxvDQ-87LTm7UylNcYTllUwhDs
+
+
+
+### testar access token para acessar endpoint protegido
+GET http://127.0.0.1:8000/auth/me HTTP/1.1
+Authorization: Bearer {{access_token}}
+
+### token gerado
+
+@access_token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwMCIsImlkIjoxLCJncnVwbyI6MywiZXhwIjoxNzc0MzE3Njg3LCJ0eXBlIjoiYWNjZXNzIn0.BpHQnCVkheYcKLmYpEwR3jrCtzGcUsC06kM46nufdD4
+@refresh_token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwMCIsImlkIjoxLCJncnVwbyI6MywiZXhwIjoxNzc0OTIxNTg3LCJ0eXBlIjoicmVmcmVzaCJ9.D35gvk5XVqap6__NRjxvDQ-87LTm7UylNcYTllUwhDs
+
+### Usar refresh token para obter novos tokens
+POST http://localhost:8000/auth/refresh
+Content-Type: application/json
+
+{
+"refresh_token": "{{refresh_token}}"
+}

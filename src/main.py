@@ -8,6 +8,7 @@ import uvicorn
 from src.routers import FuncionarioRouter
 from src.routers import ClienteRouter
 from src.routers import ProdutoRouter
+from src.routers import AuthRouter
 
 # lifespan - ciclo de vida da aplicação
 from src.infra import database
@@ -35,6 +36,7 @@ async def root():
 app.include_router(FuncionarioRouter.router)
 app.include_router(ClienteRouter.router)
 app.include_router(ProdutoRouter.router)
+app.include_router(AuthRouter.router)
 
 if __name__ == "__main__":
     uvicorn.run('src.main:app', host=HOST, port=int(PORT), reload=RELOAD)

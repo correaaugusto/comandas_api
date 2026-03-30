@@ -25,3 +25,7 @@ class ProdutoResponse(BaseModel):
     descricao: str
     foto: Optional[bytes] = None
     valor_unitario: float
+
+class ProdutoPublicoResponse(BaseModel):
+    nome: str
+    descricao: str
