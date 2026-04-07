@@ -1,13 +1,15 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 from typing import List
+from src.infra.rate_limit import limiter, get_rate_limit
+from slowapi.errors import RateLimitExceeded
+from src.services.AuditoriaService import AuditoriaService
 
 # Domain Schemas
 from src.domain.entities.ProdutoSchema import (
     ProdutoCreate,
     ProdutoUpdate,
-    ProdutoResponse,
-    ProdutoPublicoResponse
+    ProdutoResponse
 )
 
 from src.domain.Schemas.AuthSchema import FuncionarioAuth
@@ -23,7 +25,8 @@ router = APIRouter()
 
 # Criar as rotas/endpoints: GET, POST, PUT, DELETE
 @router.get("/produto/", response_model=List[ProdutoResponse], tags=["Produto"], status_code=status.HTTP_200_OK)
-async def get_produto(db: Session = Depends(get_db),  _: FuncionarioAuth = Depends(get_current_active_user)):
+@limiter.limit(get_rate_limit("moderate"))
+async def get_produto(request: Request, db: Session = Depends(get_db)):
     """Retorna todos os produtos"""
     try:
         produtos = db.query(ProdutoDB).all()
@@ -33,32 +36,10 @@ async def get_produto(db: Session = Depends(get_db),  _: FuncionarioAuth = Depen
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Erro ao buscar produtos: {str(e)}"
 )
-    
-@router.get("/produto/publico", response_model=list[ProdutoPublicoResponse], tags=["Produto"])
-async def get_produtos_publicos(db: Session = Depends(get_db)):
-    """Lista produtos sem id e valor (rota pública)"""
-    try:
-        produtos = db.query(ProdutoDB).all()
-
-        # Filtra os campos manualmente
-        resultado = [
-            {
-                "nome": p.nome,
-                "descricao": p.descricao
-            }
-            for p in produtos
-        ]
-
-        return resultado
-
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Erro ao buscar produtos públicos: {str(e)}"
-        )
 
 @router.get("/produto/{id}", response_model=ProdutoResponse, tags=["Produto"], status_code=status.HTTP_200_OK)
-async def get_produto(id: int, db: Session = Depends(get_db),  _: FuncionarioAuth = Depends(get_current_active_user)):
+@limiter.limit(get_rate_limit("moderate"))
+async def get_produto(request: Request, id: int, db: Session = Depends(get_db)):
     """Retorna um produto específico pelo ID"""
     try:
         produto = db.query(ProdutoDB).filter(ProdutoDB.id == id).first()
@@ -76,7 +57,8 @@ async def get_produto(id: int, db: Session = Depends(get_db),  _: FuncionarioAut
 )
     
 @router.post("/produto/", response_model=ProdutoResponse, status_code=status.HTTP_201_CREATED, tags=["Produto"])
-async def post_produto(produto_data: ProdutoCreate, db: Session = Depends(get_db),   _: FuncionarioAuth = Depends(require_group([1]))):
+@limiter.limit(get_rate_limit("restrictive"))
+async def post_produto(request: Request, produto_data: ProdutoCreate, db: Session = Depends(get_db), current_user: FuncionarioAuth = Depends(get_current_active_user)):
     """Cria um novo produto"""
     try:
         # Verifica se já existe produto com este nome
@@ -99,6 +81,18 @@ async def post_produto(produto_data: ProdutoCreate, db: Session = Depends(get_db
         db.add(novo_produto)
         db.commit()
         db.refresh(novo_produto)
+
+        # Depois de tudo executado e antes do return, registra a ação na auditoria
+        AuditoriaService.registrar_acao(
+            db=db,
+            funcionario_id=current_user.id,
+            acao="CREATE",
+            recurso="FUNCIONARIO",
+            recurso_id=novo_produto.id,
+            dados_antigos=None,
+            dados_novos=novo_produto, # Objeto SQLAlchemy com dados novos
+            request=request # Request completo para capturar IP e user agent
+        )
         return novo_produto
     
     except HTTPException:
@@ -110,7 +104,8 @@ async def post_produto(produto_data: ProdutoCreate, db: Session = Depends(get_db
         )
     
 @router.put("/produto/{id}", response_model=ProdutoResponse, tags=["Produto"], status_code=status.HTTP_200_OK)
-async def put_produto(id: int, produto_data: ProdutoUpdate, db: Session = Depends(get_db),  _: FuncionarioAuth = Depends(require_group([1]))):
+@limiter.limit(get_rate_limit("restrictive"))
+async def put_produto(request: Request, id: int, produto_data: ProdutoUpdate, db: Session = Depends(get_db), current_user: FuncionarioAuth = Depends(get_current_active_user)):
     """Atualiza um produto existente"""
     try:
         produto = db.query(ProdutoDB).filter(ProdutoDB.id == id).first()
@@ -128,6 +123,11 @@ async def put_produto(id: int, produto_data: ProdutoUpdate, db: Session = Depend
                 raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, detail="Já existe um produto com este nome"
                 )
+            
+        # não pode manter referencia com funcionário, para que o auditoria possa comparar
+        # por isso a cópia do __dict__
+        dados_antigos_obj = produto.__dict__.copy()
+
         # Atualiza apenas os campos fornecidos
         update_data = produto_data.model_dump(exclude_unset=True)
 
@@ -136,6 +136,18 @@ async def put_produto(id: int, produto_data: ProdutoUpdate, db: Session = Depend
 
         db.commit()
         db.refresh(produto)
+
+        # Depois de tudo executado e antes do return, registra a ação na auditoria
+        AuditoriaService.registrar_acao(
+            db=db,
+            cliente_id=current_user.id,
+            acao="UPDATE",
+            recurso="FUNCIONARIO",
+            recurso_id=produto.id,
+            dados_antigos=dados_antigos_obj,
+            dados_novos=produto, # Objeto SQLAlchemy com dados novos
+            request=request # Request completo para capturar IP e user agent
+        )
 
         return produto
     
@@ -148,7 +160,8 @@ async def put_produto(id: int, produto_data: ProdutoUpdate, db: Session = Depend
         )
     
 @router.delete("/produto/{id}", tags=["Produto"], status_code=status.HTTP_204_NO_CONTENT)
-async def delete_produto(id: int, db: Session = Depends(get_db),  _: FuncionarioAuth = Depends(require_group([1]))):
+@limiter.limit(get_rate_limit("restrictive"))
+async def delete_produto(request: Request, id: int, db: Session = Depends(get_db), current_user: FuncionarioAuth = Depends(get_current_active_user)):
     """Exclui um produto existente"""
     try:
         produto = db.query(ProdutoDB).filter(ProdutoDB.id == id).first()
@@ -160,6 +173,18 @@ async def delete_produto(id: int, db: Session = Depends(get_db),  _: Funcionario
 
         db.delete(produto)
         db.commit()
+
+         # Depois de tudo executado e antes do return, registra a ação na auditoria
+        AuditoriaService.registrar_acao(
+            db=db,
+            funcionario_id=current_user.id,
+            acao="DELETE",
+            recurso="FUNCIONARIO",
+            recurso_id=produto.id,
+            dados_antigos=produto,
+            dados_novos=None,
+            request=request
+        ) 
 
         return None
     
