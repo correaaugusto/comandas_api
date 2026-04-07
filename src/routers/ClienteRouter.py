@@ -1,6 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 from typing import List
+from src.infra.rate_limit import limiter, get_rate_limit
+from slowapi.errors import RateLimitExceeded
+from src.services.AuditoriaService import AuditoriaService
+
 
 #Augusto correa
 
@@ -23,7 +27,8 @@ router = APIRouter()
 # Criar as rotas/endpoints: GET, POST, PUT, DELETE
 
 @router.get("/cliente/", response_model=List[ClienteResponse], tags=["Cliente"], status_code=status.HTTP_200_OK)
-async def get_cliente(db: Session = Depends(get_db), current_user: FuncionarioAuth = Depends(get_current_active_user)):
+@limiter.limit(get_rate_limit("moderate"))
+async def get_clienter(request: Request, db: Session = Depends(get_db), current_user: FuncionarioAuth = Depends(get_current_active_user)):
     """Retorna todos os clientes"""
     try:
         clientes = db.query(ClienteDB).all()
@@ -35,7 +40,8 @@ async def get_cliente(db: Session = Depends(get_db), current_user: FuncionarioAu
 )
     
 @router.get("/cliente/{id}", response_model=ClienteResponse, tags=["Cliente"], status_code=status.HTTP_200_OK)
-async def get_cliente(db: Session = Depends(get_db), current_user: FuncionarioAuth = Depends(get_current_active_user)):
+@limiter.limit(get_rate_limit("moderate"))
+async def get_cliente(request: Request, id: int, db: Session = Depends(get_db), current_user: FuncionarioAuth = Depends(get_current_active_user)):
     """Retorna um cliente específico pelo ID"""
     try:
         cliente = db.query(ClienteDB).filter(ClienteDB.id == id).first()
@@ -53,7 +59,8 @@ async def get_cliente(db: Session = Depends(get_db), current_user: FuncionarioAu
 )
     
 @router.post("/cliente/", response_model=ClienteResponse, status_code=status.HTTP_201_CREATED, tags=["Cliente"])
-async def cliente(cliente_data: ClienteCreate, db: Session = Depends(get_db), _: FuncionarioAuth = Depends(require_group([1, 3]))):
+@limiter.limit(get_rate_limit("restrictive"))
+async def post_cliente(request: Request, cliente_data: ClienteCreate, db: Session = Depends(get_db), current_user: FuncionarioAuth = Depends(require_group([1, 3]))):
     """Cria um novo cliente"""
     try:
         # Verifica se já existe cliente com este CPF
@@ -75,6 +82,18 @@ async def cliente(cliente_data: ClienteCreate, db: Session = Depends(get_db), _:
         db.add(novo_cliente)
         db.commit()
         db.refresh(novo_cliente)
+
+        # Depois de tudo executado e antes do return, registra a ação na auditoria
+        AuditoriaService.registrar_acao(
+            db=db,
+            funcionario_id=current_user.id,
+            acao="CREATE",
+            recurso="FUNCIONARIO",
+            recurso_id=novo_cliente.id,
+            dados_antigos=None,
+            dados_novos=novo_cliente, # Objeto SQLAlchemy com dados novos
+            request=request # Request completo para capturar IP e user agent
+        )
         return novo_cliente
     
     except HTTPException:
@@ -86,7 +105,8 @@ async def cliente(cliente_data: ClienteCreate, db: Session = Depends(get_db), _:
         )
     
 @router.put("/cliente/{id}", response_model=ClienteResponse, tags=["Cliente"], status_code=status.HTTP_200_OK)
-async def put_cliente(id: int, cliente_data: ClienteUpdate, db: Session = Depends(get_db), _: FuncionarioAuth = Depends(require_group([1, 3]))):
+@limiter.limit(get_rate_limit("restrictive"))
+async def put_cliente(request: Request, id: int, cliente_data: ClienteUpdate, db: Session = Depends(get_db), current_user : FuncionarioAuth = Depends(require_group([1, 3]))):
     """Atualiza um cliente existente"""
     try:
         cliente = db.query(ClienteDB).filter(ClienteDB.id == id).first()
@@ -103,7 +123,13 @@ async def put_cliente(id: int, cliente_data: ClienteUpdate, db: Session = Depend
             if existing_cliente:
                 raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, detail="Já existe um cliente com este CPF"
+
                 )
+            
+        # não pode manter referencia com funcionário, para que o auditoria possa comparar
+        # por isso a cópia do __dict__
+        dados_antigos_obj = cliente.__dict__.copy()
+
         # Atualiza apenas os campos fornecidos
         update_data = cliente_data.model_dump(exclude_unset=True)
 
@@ -113,6 +139,17 @@ async def put_cliente(id: int, cliente_data: ClienteUpdate, db: Session = Depend
         db.commit()
         db.refresh(cliente)
 
+        # Depois de tudo executado e antes do return, registra a ação na auditoria
+        AuditoriaService.registrar_acao(
+            db=db,
+            cliente_id=current_user.id,
+            acao="UPDATE",
+            recurso="FUNCIONARIO",
+            recurso_id=cliente.id,
+            dados_antigos=dados_antigos_obj,
+            dados_novos=cliente, # Objeto SQLAlchemy com dados novos
+            request=request # Request completo para capturar IP e user agent
+        )
         return cliente
     
     except HTTPException:
@@ -124,7 +161,8 @@ async def put_cliente(id: int, cliente_data: ClienteUpdate, db: Session = Depend
         )
     
 @router.delete("/cliente/{id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Cliente"], summary="Remover cliente")
-async def delete_cliente(id: int, db: Session = Depends(get_db), _: FuncionarioAuth = Depends(require_group([1]))):
+@limiter.limit(get_rate_limit("restrictive"))
+async def delete_cliente(request: Request, id: int, db: Session = Depends(get_db), current_user : FuncionarioAuth = Depends(require_group([1]))):
     """Remove um cliente"""
     try:
         cliente = db.query(ClienteDB).filter(ClienteDB.id == id).first()
@@ -137,6 +175,20 @@ async def delete_cliente(id: int, db: Session = Depends(get_db), _: FuncionarioA
 
         db.delete(cliente)
         db.commit()
+
+        # Depois de tudo executado e antes do return, registra a ação na auditoria
+        AuditoriaService.registrar_acao(
+            db=db,
+            funcionario_id=current_user.id,
+            acao="DELETE",
+            recurso="FUNCIONARIO",
+            recurso_id=cliente.id,
+            dados_antigos=cliente,
+            dados_novos=None,
+            request=request
+        )   
+
+
         return None
 
     except HTTPException:

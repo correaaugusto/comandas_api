@@ -9,11 +9,3 @@ class ProdutoDB(database.Base):
     descricao = Column(VARCHAR(200), nullable=False)
     foto = Column(LargeBinary, nullable=True)
     valor_unitario = Column(Numeric(11,2), nullable=True)
-
-    def __init__(self, id, nome, descricao, foto, valor_unitario):
-        self.id = id
-        self.nome = nome
-        self.descricao = descricao
-        self.foto = foto
-        self.valor_unitario = valor_unitario
-
